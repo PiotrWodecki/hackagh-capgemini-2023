@@ -19,7 +19,7 @@ type ServerData = {
 };
 
 function useServerData(): ServerData {
-  const socketUrl = "ws://hackagh3.loca.lt/ws";
+  const socketUrl = "ws://hackagh4.loca.lt/ws";
   const { sendJsonMessage, lastJsonMessage } = useWebSocket(socketUrl, {
     onOpen: () => sendJsonMessage({ type: "INIT_REQUEST" }),
     onError: (ev) => console.error(ev.message),
