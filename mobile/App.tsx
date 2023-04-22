@@ -16,7 +16,6 @@ import * as Progress from "react-native-progress";
 import Slider from "@react-native-community/slider";
 import { FontAwesome, Entypo, FontAwesome5 } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
-import { transform } from "typescript";
 
 type ServerMessage =
   | {
@@ -30,6 +29,14 @@ type ServerMessage =
       payload: {
         temp: number;
       };
+    }
+  | {
+      type: "TEMPERATURE_TARGET";
+      payload: { target: number };
+    }
+  | {
+      type: "TEMPERATURE_STATE";
+      payload: { state: boolean };
     }
   | {
       type: "SPEED";
@@ -47,10 +54,14 @@ type ServerMessage =
 type ServerData = {
   battery: null | number;
   temperature: null | number;
+  temperatureState: null | boolean;
+  temperatureTarget: null | number;
   speed: null | number;
   charging: null | boolean;
   coords: null | { latitude: number; longitude: number };
   initRequest(): void;
+  setTemperatureState(state: boolean): void;
+  setTemperatureTarget(target: number): void;
 };
 
 function useServerData(): ServerData {
@@ -68,10 +79,25 @@ function useServerData(): ServerData {
     battery: null,
     speed: null,
     temperature: null,
+    temperatureState: null,
+    temperatureTarget: null,
     charging: null,
     coords: null,
     initRequest: () => {
       sendJsonMessage({ type: "INIT_REQUEST_APP" });
+    },
+    setTemperatureState: (state) => {
+      console.log("set state");
+      sendJsonMessage({
+        type: "TEMPERATURE_STATE",
+        payload: { state },
+      });
+    },
+    setTemperatureTarget: (target) => {
+      sendJsonMessage({
+        type: "TEMPERATURE_SET",
+        payload: { target },
+      });
     },
   });
 
@@ -102,6 +128,16 @@ function useServerData(): ServerData {
         setState((state) => ({
           ...state,
           coords: message.payload,
+        }));
+      } else if (message.type === "TEMPERATURE_TARGET") {
+        setState((state) => ({
+          ...state,
+          temperatureTarget: message.payload.target,
+        }));
+      } else if (message.type === "TEMPERATURE_STATE") {
+        setState((state) => ({
+          ...state,
+          temperatureState: message.payload.state,
         }));
       } else if (Object.keys(message).length != 0) {
         console.log("Unhandled message: ", message);
@@ -233,8 +269,54 @@ function mapView(carCoords: null | { latitude: number; longitude: number }) {
   );
 }
 
+function useRollbackValue(value, serverSetFunction) {
+  const [state, setState] = useState(value);
+
+  React.useEffect(() => {
+    if (state === null && value !== null) {
+      setState(value);
+    }
+  }, [value]);
+
+  const vars = useRef({
+    timeout: null,
+  });
+
+  return [
+    state,
+    (newValue) => {
+      setState(newValue);
+      if (vars.current.timeout) {
+        clearTimeout(vars.current.timeout);
+        vars.current.timeout = null;
+      }
+      vars.current.timeout = setTimeout(() => {
+        serverSetFunction(newValue);
+      }, 1000);
+    },
+  ];
+}
+
 export default function App() {
-  const { battery, temperature, coords, initRequest } = useServerData();
+  const {
+    battery,
+    charging,
+    temperature,
+    temperatureState,
+    temperatureTarget,
+    setTemperatureTarget,
+    setTemperatureState,
+  } = useServerData();
+
+  const [temperatureStateR, setTemperatureStateR] = useRollbackValue(
+    temperatureState,
+    setTemperatureState
+  );
+
+  const [temperatureTargetR, setTemperatureTargetR] = useRollbackValue(
+    temperatureTarget,
+    setTemperatureTarget
+  );
 
   const showWarning = (warning) => {
     Toast.show({
@@ -243,9 +325,6 @@ export default function App() {
       text2: warning,
     });
   };
-
-  const [adjusting, setAdjusting] = useState<null | number>(null);
-  console.log(adjusting);
 
   const temperatureAdjustment = (
     <View
@@ -265,6 +344,11 @@ export default function App() {
           alignItems: "center",
         }}
         activeOpacity={0.5}
+        onPress={() => {
+          if (temperatureTargetR && setTemperatureTargetR) {
+            setTemperatureTargetR(temperatureTargetR - 1);
+          }
+        }}
       >
         <Text style={{ fontSize: 25, color: "#555555" }}>-</Text>
       </TouchableOpacity>
@@ -282,7 +366,7 @@ export default function App() {
         }}
       >
         <Text style={{ fontSize: 25, color: "#555555" }}>
-          {adjusting ?? "?"}°C
+          {temperatureTargetR ?? "?"}°C
         </Text>
       </View>
       <TouchableOpacity
@@ -295,10 +379,87 @@ export default function App() {
           alignItems: "center",
         }}
         activeOpacity={0.5}
+        onPress={() => {
+          if (temperatureTargetR && setTemperatureTargetR) {
+            setTemperatureTargetR(temperatureTargetR + 1);
+          }
+        }}
       >
         <Text style={{ fontSize: 25, color: "#555555" }}>+</Text>
       </TouchableOpacity>
     </View>
+  );
+
+  const chargingText = (
+    <>
+      <Text
+        style={{
+          position: "absolute",
+          alignSelf: "center",
+          top: "15%",
+          fontSize: 20,
+          textShadowColor: "#F5D21F",
+          textShadowRadius: 1,
+          textShadowOffset: { height: 1, width: 1 },
+          padding: 1,
+        }}
+      >
+        Charging...
+      </Text>
+      <Text
+        style={{
+          position: "absolute",
+          alignSelf: "center",
+          top: "15%",
+          fontSize: 20,
+          textShadowColor: "#F5D21F",
+          textShadowRadius: 1,
+          textShadowOffset: { height: -1, width: 1 },
+          padding: 1,
+        }}
+      >
+        Charging...
+      </Text>
+      <Text
+        style={{
+          position: "absolute",
+          alignSelf: "center",
+          top: "15%",
+          fontSize: 20,
+          textShadowColor: "#F5D21F",
+          textShadowRadius: 1,
+          textShadowOffset: { height: 1, width: -1 },
+          padding: 1,
+        }}
+      >
+        Charging...
+      </Text>
+      <Text
+        style={{
+          position: "absolute",
+          alignSelf: "center",
+          top: "15%",
+          fontSize: 20,
+          textShadowColor: "#F5D21F",
+          textShadowRadius: 1,
+          textShadowOffset: { height: -1, width: -1 },
+          padding: 1,
+        }}
+      >
+        Charging...
+      </Text>
+      <Text
+        style={{
+          color: "white",
+          position: "absolute",
+          alignSelf: "center",
+          top: "15%",
+          fontSize: 20,
+        }}
+      >
+        Charging...
+      </Text>
+    </>
   );
 
   return (
@@ -323,14 +484,15 @@ export default function App() {
           />
           <Text style={styles.batteryText}>{battery * 100}%</Text>
         </View>
-
         <Progress.Bar
           progress={battery}
           borderRadius={20}
           height={60}
           width={250}
           color="#F5D21F"
-        />
+        >
+          {charging ? chargingText : null}
+        </Progress.Bar>
       </View>
 
 
@@ -356,7 +518,6 @@ export default function App() {
               flex: 1.2,
               backgroundColor: "#489F81",
               borderTopLeftRadius: 20,
-              borderBottomLeftRadius: adjusting ? 0 : 20,
               padding: 15,
               display: "flex",
               alignItems: "center",
@@ -371,24 +532,25 @@ export default function App() {
               flex: 3,
               backgroundColor: "#5FCCA6",
               borderTopRightRadius: 20,
-              borderBottomRightRadius: adjusting ? 0 : 20,
               padding: 15,
               display: "flex",
               alignItems: "center",
             }}
             activeOpacity={0.5}
             onPress={() => {
-              setAdjusting((adj) => (adj ? null : temperature));
+              if (temperatureStateR !== null && setTemperatureStateR) {
+                setTemperatureStateR(!temperatureStateR);
+              }
             }}
           >
             <Text style={{ fontSize: 25, color: "white" }}>
               <FontAwesome name="thermometer-3" size={25} />
               {"  Adjust "}
-              {adjusting ? "On" : "Off"}
+              {temperatureStateR ? "On" : "Off"}
             </Text>
           </TouchableOpacity>
         </View>
-        {adjusting ? temperatureAdjustment : null}
+        {temperatureAdjustment}
       </View>
       <TouchableOpacity style={{ width: "100%", alignItems: "center", backgroundColor: "#5FCCA6", padding: 10, borderRadius: 20}}>
         <FontAwesome5 
