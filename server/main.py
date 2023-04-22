@@ -44,7 +44,15 @@ class Tempereature:
         return {
             "type": "TEMPERATURE",
             "payload": {
-                "celsius": self.celsius
+                "temp": self.celsius
+            }
+        }
+
+    def get_json_set(self):
+        return {
+            "type": "TEMPERATURE_SET",
+            "payload": {
+                "temp": self.celsius
             }
         }
 
@@ -112,10 +120,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 for w in app_websockets:
                     await w.send_json(tempereature.get_json())
             elif message_type == "TEMPERATURE_SET":
-                tempereature.celsius = float(message["payload"]["temp"])
                 print("Temperature set: ", tempereature.celsius)
                 for w in car_websockets:
-                    await w.send_json(tempereature.get_json())
+                    await w.send_json(tempereature.get_json_set())
             elif message_type == "CHARGING_STATE":
                 for w in app_websockets:
                     await w.send_json(battery.get_json_charging())
