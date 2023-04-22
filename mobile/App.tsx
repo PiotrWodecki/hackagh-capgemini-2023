@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { createContext, useContext, useRef } from "react";
 import MapView, { Marker } from "react-native-maps";
 import { useEffect, useState } from "react";
 import {
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
   Image,
+  Platform,
 } from "react-native";
 import * as Location from "expo-location";
 import useWebSocket from "react-native-use-websocket";
@@ -16,40 +17,48 @@ import * as Progress from "react-native-progress";
 import Slider from "@react-native-community/slider";
 import { FontAwesome, Entypo, FontAwesome5 } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
+import { transform } from "typescript";
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import haversineDistance from 'haversine-distance';
+
+const Stack = createNativeStackNavigator();
+const wsContext = createContext(null);
 
 type ServerMessage =
   | {
-      type: "BATTERY";
-      payload: {
-        percent: number;
-      };
-    }
-  | {
-      type: "TEMPERATURE";
-      payload: {
-        temp: number;
-      };
-    }
-  | {
-      type: "TEMPERATURE_TARGET";
-      payload: { target: number };
-    }
-  | {
-      type: "TEMPERATURE_STATE";
-      payload: { state: boolean };
-    }
-  | {
-      type: "SPEED";
-      payload: { speed: number };
-    }
-  | {
-      type: "CHARGING_STATE";
-      payload: { charging: boolean };
-    }
-  | {
-      type: "COORDS_CAR";
-      payload: { latitude: number; longitude: number };
+    type: "BATTERY";
+    payload: {
+      percent: number;
     };
+  }
+  | {
+    type: "TEMPERATURE";
+    payload: {
+      temp: number;
+    };
+  }
+  | {
+    type: "TEMPERATURE_TARGET";
+    payload: { target: number };
+  }
+  | {
+    type: "TEMPERATURE_STATE";
+    payload: { state: boolean };
+  }
+  | { type: "SCHEDULE", payload: { schedule: string[] } }
+  | {
+    type: "SPEED";
+    payload: { speed: number };
+  }
+  | {
+    type: "CHARGING_STATE";
+    payload: { charging: boolean };
+  }
+  | {
+    type: "COORDS_CAR";
+    payload: { latitude: number; longitude: number };
+  };
 
 type ServerData = {
   battery: null | number;
@@ -59,13 +68,15 @@ type ServerData = {
   speed: null | number;
   charging: null | boolean;
   coords: null | { latitude: number; longitude: number };
+  schedules: null | Date[];
   initRequest(): void;
   setTemperatureState(state: boolean): void;
   setTemperatureTarget(target: number): void;
+  setSchedule(schedule: Date[]): void;
 };
 
 function useServerData(): ServerData {
-  const socketUrl = "ws://hackagh4.loca.lt/ws";
+  const socketUrl = "ws://hackagh5.loca.lt/ws";
   const { sendJsonMessage, lastJsonMessage } = useWebSocket(socketUrl, {
     onOpen: () => {
       console.log("connected");
@@ -83,6 +94,7 @@ function useServerData(): ServerData {
     temperatureTarget: null,
     charging: null,
     coords: null,
+    schedules: null,
     initRequest: () => {
       sendJsonMessage({ type: "INIT_REQUEST_APP" });
     },
@@ -99,6 +111,12 @@ function useServerData(): ServerData {
         payload: { target },
       });
     },
+    setSchedule: (schedule) => {
+      sendJsonMessage({
+        type: "SCHEDULE",
+        payload: { schedule: schedule.map(d => d.toISOString()) }
+      });
+    }
   });
 
   useEffect(() => {
@@ -139,6 +157,11 @@ function useServerData(): ServerData {
           ...state,
           temperatureState: message.payload.state,
         }));
+      } else if (message.type === "SCHEDULE") {
+        setState((state) => ({
+          ...state,
+          schedules: message.payload.schedule.map(s => new Date(s)),
+        }));
       } else if (Object.keys(message).length != 0) {
         console.log("Unhandled message: ", message);
       }
@@ -150,7 +173,42 @@ function useServerData(): ServerData {
   return state;
 }
 
-function timePicker() {
+
+function useRollbackValue(value, serverSetFunction) {
+  const [state, setState] = useState(value);
+
+  React.useEffect(() => {
+    if (state === null && value !== null) {
+      setState(value);
+    }
+  }, [value]);
+
+  const vars = useRef({
+    timeout: null,
+  });
+
+
+  return [
+    state,
+    (newValue) => {
+      setState(newValue);
+      if (vars.current.timeout) {
+        clearTimeout(vars.current.timeout);
+        vars.current.timeout = null;
+      }
+      vars.current.timeout = setTimeout(() => {
+        serverSetFunction(newValue);
+      }, 1000);
+    },
+  ];
+}
+
+
+function TimePicker({ route }) {
+  const { schedules, setSchedule }: ServerData = useContext(wsContext);
+
+  const [schedulesR, setScheduleR] = useRollbackValue(schedules, setSchedule);
+
   const dayNames = [
     "Monday",
     "Tuesday",
@@ -161,24 +219,12 @@ function timePicker() {
     "Monday",
   ];
 
-  const defaultTime = new Date(2000, 1, 1, 8, 0);
-  const [times, setTimes] = useState([
-    defaultTime,
-    defaultTime,
-    defaultTime,
-    defaultTime,
-    defaultTime,
-    defaultTime,
-    defaultTime,
-  ]);
-
   const [showPickerForDay, setShowPickerForDay] = useState<null | number>(null);
 
-  const onChange = (event: any, selectedDate: Date) => {
-    setTimes((times) => {
-      times[showPickerForDay] = selectedDate;
-      return times;
-    });
+  const onChange = (index) => (event: any, selectedDate: Date) => {
+    const newSchedule = [...schedulesR];
+    newSchedule[index] = selectedDate;
+    setScheduleR(newSchedule);
     setShowPickerForDay(null);
   };
 
@@ -197,35 +243,37 @@ function timePicker() {
           justifyContent: "center",
           gap: 10,
         }}
-        data={times}
+        data={schedulesR}
         renderItem={({ item, index }) => {
           return (
             <View
               style={{
                 flexDirection: "row",
                 gap: 20,
-                backgroundColor: "#e4e4e4",
-                borderRadius: 5,
+                backgroundColor: "#489F81",
+                borderRadius: 25,
                 padding: 10,
               }}
             >
-              <Text style={{ fontSize: 30, width: 200 }}>
+              <Text style={{ fontSize: 30, width: 200, marginLeft: 10, color: "white" }}>
                 {dayNames[index]}
               </Text>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "#f5d21f",
-                  borderRadius: 5,
-                  paddingHorizontal: 5,
-                }}
-                onPress={() => setShowPickerForDay(index)}
-              >
-                <Text style={{ fontSize: 30 }}>
-                  {item.toLocaleTimeString().slice(0, 5)}
-                </Text>
-              </TouchableOpacity>
-              {showPickerForDay === index && (
-                <DateTimePicker mode="time" value={item} onChange={onChange} />
+              {Platform.OS === "android" ??
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: "#5FCCA6",
+                    borderRadius: 15,
+                    paddingHorizontal: 5,
+                  }}
+                  onPress={() => setShowPickerForDay(index)}
+                >
+                  <Text style={{ fontSize: 30, color: "white" }}>
+                    {item.toLocaleTimeString().slice(0, 5)}
+                  </Text>
+                </TouchableOpacity>
+              }
+              {(showPickerForDay === index || Platform.OS === "ios") && (
+                <DateTimePicker themeVariant="dark" textColor="white" mode="time" value={item} onChange={onChange(index)} />
               )}
             </View>
           );
@@ -235,7 +283,8 @@ function timePicker() {
   );
 }
 
-function mapView(carCoords: null | { latitude: number; longitude: number }) {
+function OurMapView({ route, navigation }) {
+  const carCoords: null | { latitude: number; longitude: number } = route.params;
   const [status, requestPermission] = Location.useForegroundPermissions();
   const mapRef = useRef<MapView>();
 
@@ -269,44 +318,18 @@ function mapView(carCoords: null | { latitude: number; longitude: number }) {
   );
 }
 
-function useRollbackValue(value, serverSetFunction) {
-  const [state, setState] = useState(value);
-
-  React.useEffect(() => {
-    if (state === null && value !== null) {
-      setState(value);
-    }
-  }, [value]);
-
-  const vars = useRef({
-    timeout: null,
-  });
-
-  return [
-    state,
-    (newValue) => {
-      setState(newValue);
-      if (vars.current.timeout) {
-        clearTimeout(vars.current.timeout);
-        vars.current.timeout = null;
-      }
-      vars.current.timeout = setTimeout(() => {
-        serverSetFunction(newValue);
-      }, 1000);
-    },
-  ];
-}
-
-export default function App() {
+function App({ route, navigation }) {
   const {
     battery,
     charging,
     temperature,
     temperatureState,
     temperatureTarget,
+    coords,
+    speed,
     setTemperatureTarget,
     setTemperatureState,
-  } = useServerData();
+  }: ServerData = useContext(wsContext);
 
   const [temperatureStateR, setTemperatureStateR] = useRollbackValue(
     temperatureState,
@@ -318,13 +341,23 @@ export default function App() {
     setTemperatureTarget
   );
 
-  const showWarning = (warning) => {
-    Toast.show({
-      type: "error",
-      text1: "Warning!",
-      text2: warning,
-    });
-  };
+  const [status, requestPermission] = Location.useForegroundPermissions();
+  useEffect(() => {
+    (async () => {
+      await requestPermission();
+      if (coords.latitude !== 0 && coords.longitude !== 0) {
+        const pos = await Location.getLastKnownPositionAsync();
+        const makeDumb = val => ({ lat: val.latitude, lon: val.longitude });
+        const distance = haversineDistance(makeDumb(pos.coords), makeDumb(coords));
+        if (distance > 50 && speed > 10) {
+          Toast.show({
+            type: "error",
+            text1: "Your car is leaving!",
+          });
+        }
+      }
+    })();
+  }, [coords, speed])
 
   const temperatureAdjustment = (
     <View
@@ -466,13 +499,13 @@ export default function App() {
     <View style={styles.container}>
 
 
-      <TouchableOpacity onPress={() => showWarning("abc")}>
+      <TouchableOpacity>
         <Image
           source={require("./assets/autko1.png")}
           style={styles.teslaImage}
         />
       </TouchableOpacity>
-      
+
 
       <View style={styles.statRow}>
         <View>
@@ -496,8 +529,9 @@ export default function App() {
       </View>
 
 
-      <TouchableOpacity style={{ width: "100%", alignItems: "center", backgroundColor: "#5FCCA6", padding: 15, borderRadius: 20 }}>
-        <Text style={{ fontSize: 25, color:"white"}}>
+      <TouchableOpacity style={{ width: "100%", alignItems: "center", backgroundColor: "#5FCCA6", padding: 15, borderRadius: 20 }}
+        onPress={() => navigation.navigate("schedule")}>
+        <Text style={{ fontSize: 25, color: "white" }}>
           <FontAwesome5
             name="calendar-alt"
             size={25}
@@ -552,16 +586,32 @@ export default function App() {
         </View>
         {temperatureAdjustment}
       </View>
-      <TouchableOpacity style={{ width: "100%", alignItems: "center", backgroundColor: "#5FCCA6", padding: 10, borderRadius: 20}}>
-        <FontAwesome5 
+      <TouchableOpacity
+        style={{ width: "100%", alignItems: "center", backgroundColor: "#5FCCA6", padding: 10, borderRadius: 20 }}
+        onPress={() => navigation.navigate("map", coords)}>
+        <FontAwesome5
           name="map-marked-alt"
           size={40}
           color="white"
         />
       </TouchableOpacity>
       <Toast position="top" bottomOffset={20} />
-    </View>
+    </View >
   );
+}
+
+export default function RootApp() {
+  const data = useServerData();
+
+  return <wsContext.Provider value={data}>
+    <NavigationContainer>
+      <Stack.Navigator >
+        <Stack.Screen name="home" component={App} options={{ header: () => null }} />
+        <Stack.Screen name="map" component={OurMapView} />
+        <Stack.Screen name="schedule" component={TimePicker} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  </wsContext.Provider>
 }
 
 const styles = StyleSheet.create({
