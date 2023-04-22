@@ -100,7 +100,7 @@ async def websocket_endpoint(websocket: WebSocket):
             elif message_type == "CHARGING_SET":
                 battery.charging = bool(message["payload"]["charging"])
                 print("Charging: ", battery.charging)
-                for w in app_websockets:
+                for w in car_websockets:
                     await w.send_json(battery.get_json_charging())
             else:
                 print("Unknown message type: ", message_type)
