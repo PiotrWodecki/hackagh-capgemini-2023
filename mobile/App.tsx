@@ -99,7 +99,6 @@ function useServerData(): ServerData {
       sendJsonMessage({ type: "INIT_REQUEST_APP" });
     },
     setTemperatureState: (state) => {
-      console.log("set state");
       sendJsonMessage({
         type: "TEMPERATURE_STATE",
         payload: { state },
@@ -258,7 +257,7 @@ function TimePicker({ route }) {
               <Text style={{ fontSize: 30, width: 200, marginLeft: 10, color: "white" }}>
                 {dayNames[index]}
               </Text>
-              {Platform.OS === "android" ??
+              {Platform.OS === "android" &&
                 <TouchableOpacity
                   style={{
                     backgroundColor: "#5FCCA6",
@@ -345,7 +344,7 @@ function App({ route, navigation }) {
   useEffect(() => {
     (async () => {
       await requestPermission();
-      if (coords.latitude !== 0 && coords.longitude !== 0) {
+      if (coords && coords.latitude !== 0 && coords.longitude !== 0) {
         const pos = await Location.getLastKnownPositionAsync();
         const makeDumb = val => ({ lat: val.latitude, lon: val.longitude });
         const distance = haversineDistance(makeDumb(pos.coords), makeDumb(coords));
