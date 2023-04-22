@@ -14,7 +14,7 @@ import useWebSocket from "react-native-use-websocket";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Progress from "react-native-progress";
 import Slider from "@react-native-community/slider";
-import { SimpleLineIcons, FontAwesome, Entypo } from "@expo/vector-icons";
+import { FontAwesome, Entypo, FontAwesome5 } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
 import { transform } from "typescript";
 
@@ -303,12 +303,15 @@ export default function App() {
 
   return (
     <View style={styles.container}>
+
+
       <TouchableOpacity onPress={() => showWarning("abc")}>
         <Image
           source={require("./assets/autko1.png")}
           style={styles.teslaImage}
         />
       </TouchableOpacity>
+      
 
       <View style={styles.statRow}>
         <View>
@@ -324,11 +327,23 @@ export default function App() {
         <Progress.Bar
           progress={battery}
           borderRadius={20}
-          height={50}
+          height={60}
           width={250}
           color="#F5D21F"
         />
       </View>
+
+
+      <TouchableOpacity style={{ width: "100%", alignItems: "center", backgroundColor: "#5FCCA6", padding: 15, borderRadius: 20 }}>
+        <Text style={{ fontSize: 25, color:"white"}}>
+          <FontAwesome5
+            name="calendar-alt"
+            size={25}
+            color="white"
+
+          /> Schedule
+        </Text>
+      </TouchableOpacity>
 
       <View style={{ width: "100%" }}>
         <View
@@ -375,7 +390,13 @@ export default function App() {
         </View>
         {adjusting ? temperatureAdjustment : null}
       </View>
-
+      <TouchableOpacity style={{ width: "100%", alignItems: "center", backgroundColor: "#5FCCA6", padding: 10, borderRadius: 20}}>
+        <FontAwesome5 
+          name="map-marked-alt"
+          size={40}
+          color="white"
+        />
+      </TouchableOpacity>
       <Toast position="top" bottomOffset={20} />
     </View>
   );
@@ -402,9 +423,10 @@ const styles = StyleSheet.create({
     margin: 5,
   },
   teslaImage: {
-    width: 400,
-    height: 200,
-    margin: 50,
+    width: 450,
+    height: 250,
+    margin: 30,
+    marginTop: 65,
   },
   temperatureContainer: {
     display: "flex",
