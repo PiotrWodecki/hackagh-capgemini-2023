@@ -55,10 +55,10 @@ class Position:
 
     def get_json(self):
         return {
-            "type": "COORDS",
+            "type": "COORDS_CAR",
             "payload": {
-                "lat": self.lat,
-                "lon": self.lon
+                "latitude": self.lat,
+                "longitude": self.lon
             }
         }
 
@@ -68,7 +68,8 @@ car_websockets = []
 battery = Battery()
 speed = Speed()
 tempereature = Tempereature()
-position = Position()
+position_car = Position()
+position_app = Position()
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -91,7 +92,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json(speed.get_json()),
                 await websocket.send_json(tempereature.get_json())
                 await websocket.send_json(battery.get_json_charging())
-                await websocket.send_json(position.get_json())
+                await websocket.send_json(position_car.get_json())
             elif message_type == "INIT_REQUEST_CAR":
                 print("New car connected")
                 car_websockets.append(websocket)
@@ -110,6 +111,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 print("Temperature: ", tempereature.celsius)
                 for w in app_websockets:
                     await w.send_json(tempereature.get_json())
+            elif message_type == "TEMPERATURE_SET":
+                tempereature.celsius = float(message["payload"]["temp"])
+                print("Temperature set: ", tempereature.celsius)
+                for w in car_websockets:
+                    await w.send_json(tempereature.get_json())
             elif message_type == "CHARGING_STATE":
                 for w in app_websockets:
                     await w.send_json(battery.get_json_charging())
@@ -118,12 +124,18 @@ async def websocket_endpoint(websocket: WebSocket):
                 print("Charging: ", battery.charging)
                 for w in car_websockets:
                     await w.send_json(battery.get_json_charging())
-            elif message_type == "COORDS":
-                position.lat = float(message["payload"]["lat"])
-                position.lon = float(message["payload"]["lon"])
-                print("Position: ", position.lat, position.lon)
+            elif message_type == "COORDS_CAR":
+                position_car.lat = float(message["payload"]["latitude"])
+                position_car.lon = float(message["payload"]["longitude"])
+                print("Position: ", position_car.lat, position_car.lon)
                 for w in app_websockets:
-                    await w.send_json(position.get_json())
+                    await w.send_json(position_car.get_json())
+            elif message_type == "COORDS_APP":
+                position_app.lat = float(message["payload"]["latitude"])
+                position_app.lon = float(message["payload"]["longitude"])
+                print("Position: ", position_app.lat, position_app.lon)
+                for w in car_websockets:
+                    await w.send_json(position_app.get_json())
             else:
                 print("Unknown message type: ", message_type)
     except WebSocketDisconnect:
