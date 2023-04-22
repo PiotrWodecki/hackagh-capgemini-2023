@@ -39,6 +39,8 @@ class Speed:
 class Tempereature:
     def __init__(self):
         self.celsius = 20.0
+        self.state = False
+        self.target = 20.0
 
     def get_json(self):
         return {
@@ -48,19 +50,27 @@ class Tempereature:
             }
         }
 
-    def get_json_set(self, target):
+    def get_json_set(self):
         return {
             "type": "TEMPERATURE_SET",
             "payload": {
-                "temp": target
+                "temp": self.target
             }
         }
     
-    def get_json_state(self, state):
+    def get_json_state(self):
         return {
             "type": "TEMPERATURE_STATE",
             "payload": {
-                "temp": state
+                "state": self.state
+            }
+        }
+
+    def get_json_target(self):
+        return {
+            "type": "TEMPERATURE_TARGET",
+            "payload": {
+                "target": self.target
             }
         }
 
@@ -107,6 +117,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json(battery.get_json_percent()),
                 await websocket.send_json(speed.get_json()),
                 await websocket.send_json(tempereature.get_json())
+                await websocket.send_json(tempereature.get_json_state())
+                await websocket.send_json(tempereature.get_json_target())
                 await websocket.send_json(battery.get_json_charging())
                 await websocket.send_json(position_car.get_json())
             elif message_type == "INIT_REQUEST_CAR":
@@ -127,16 +139,24 @@ async def websocket_endpoint(websocket: WebSocket):
                 print("Temperature: ", tempereature.celsius)
                 for w in app_websockets:
                     await w.send_json(tempereature.get_json())
+            elif message_type == "TEMPERATURE_TARGET":
+                print("Temperature: ", tempereature.celsius)
+                for w in app_websockets:
+                    await w.send_json(tempereature.get_json_target())
             elif message_type == "TEMPERATURE_SET":
-                print("Temperature set: ", tempereature.celsius)
-                target = float(message["payload"]["temp"])
+                tempereature.target = float(message["payload"]["target"])
+                print("Temperature set: ", tempereature.target)
                 for w in car_websockets:
-                    await w.send_json(tempereature.get_json_set(target))
+                    await w.send_json(tempereature.get_json_set())
+                for w in app_websockets:
+                    await w.send_json(tempereature.get_json_target())
             elif message_type == "TEMPERATURE_STATE":
-                state = float(message["payload"]["state"])
-                print("Temperature control state: ", state)
+                tempereature.state = float(message["payload"]["state"])
+                print("Temperature control state: ", tempereature.state)
                 for w in car_websockets:
-                    await w.send_json(tempereature.get_json_state(state))
+                    await w.send_json(tempereature.get_json_state())
+                for w in app_websockets:
+                    await w.send_json(tempereature.get_json_state())
             elif message_type == "CHARGING_STATE":
                 for w in app_websockets:
                     await w.send_json(battery.get_json_charging())
