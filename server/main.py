@@ -1,7 +1,8 @@
-import asyncio
+from fastapi_utils.tasks import repeat_every
 import json
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from datetime import datetime
+from datetime import time
 
 app = FastAPI()
 
@@ -88,6 +89,27 @@ class Position:
             }
         }
 
+class Schedule:
+    def __init__(self):
+        self.schedule = [
+            '2023-04-17T08:00:00',
+            '2023-04-18T08:00:00',
+            '2023-04-19T08:00:00',
+            '2023-04-20T08:00:00',
+            '2023-04-21T08:00:00',
+            '2023-04-22T08:00:00',
+            '2023-04-23T08:00:00',
+        ]
+
+    def get_json(self):
+        return {
+            "type": "SCHEDULE",
+            "payload": {
+                "schedule": self.schedule
+            }
+        }
+
+
 app_websockets = []
 car_websockets = []
 
@@ -96,6 +118,34 @@ speed = Speed()
 tempereature = Tempereature()
 position_car = Position()
 position_app = Position()
+schedule = Schedule()
+
+
+def isNowAfterPeriod(startTime, nowTime): 
+    # endtime is just after nowtime
+    endTime = time(startTime.hour, startTime.minute + 1)
+    return nowTime >= startTime and nowTime <= endTime
+
+
+@app.on_event("startup")
+@repeat_every(seconds=10)
+async def check_time():
+    now = datetime.now().utcnow()
+    for i in range(len(schedule.schedule)):
+        start_time = datetime.fromisoformat(schedule.schedule[i])
+        if isNowAfterPeriod(time(start_time.hour, start_time.minute), time(now.hour, now.minute)):
+            print("Auto chargin and heating started")
+            for w in car_websockets:
+                print("Sending charging and heating")
+                await w.send_json(tempereature.get_json_set())
+                battery.charging = True
+                tempereature.state = True
+                await w.send_json(tempereature.get_json_state())
+                await w.send_json(battery.get_json_charging())
+            for w in app_websockets:
+                await w.send_json(tempereature.get_json_state())
+                await w.send_json(battery.get_json_charging())
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -121,6 +171,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json(tempereature.get_json_target())
                 await websocket.send_json(battery.get_json_charging())
                 await websocket.send_json(position_car.get_json())
+                await websocket.send_json(schedule.get_json())
             elif message_type == "INIT_REQUEST_CAR":
                 print("New car connected")
                 car_websockets.append(websocket)
@@ -151,7 +202,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 for w in app_websockets:
                     await w.send_json(tempereature.get_json_target())
             elif message_type == "TEMPERATURE_STATE":
-                tempereature.state = float(message["payload"]["state"])
+                tempereature.state = bool(message["payload"]["state"])
                 print("Temperature control state: ", tempereature.state)
                 for w in car_websockets:
                     await w.send_json(tempereature.get_json_state())
@@ -177,6 +228,15 @@ async def websocket_endpoint(websocket: WebSocket):
                 print("Position: ", position_app.lat, position_app.lon)
                 for w in car_websockets:
                     await w.send_json(position_app.get_json())
+            elif message_type == "SCHEDULE":
+                schedule.schedule = message["payload"]["schedule"]
+                print("Schedule: ", schedule.schedule)
+                for w in app_websockets:
+                    await w.send_json(schedule.get_json())
+            elif message_type == "SCHEDULE_GET":
+                print("Schedule get: ", schedule.schedule)
+                for w in app_websockets:
+                    await w.send_json(schedule.get_json())
             else:
                 print("Unknown message type: ", message_type)
     except WebSocketDisconnect:
