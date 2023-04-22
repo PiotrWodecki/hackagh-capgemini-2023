@@ -3,21 +3,20 @@ import MapView, { Marker } from "react-native-maps";
 import { useEffect, useState } from "react";
 import {
   FlatList,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View, Image,
-  StatusBar,
+  View,
+  Image,
 } from "react-native";
 import * as Location from "expo-location";
 import useWebSocket from "react-native-use-websocket";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import * as Progress from 'react-native-progress';
-import Slider from '@react-native-community/slider';
-import { SimpleLineIcons, FontAwesome, Entypo } from '@expo/vector-icons';
-import Toast from 'react-native-toast-message';
-
+import * as Progress from "react-native-progress";
+import Slider from "@react-native-community/slider";
+import { SimpleLineIcons, FontAwesome, Entypo } from "@expo/vector-icons";
+import Toast from "react-native-toast-message";
+import { transform } from "typescript";
 
 type ServerMessage =
   | {
@@ -29,7 +28,7 @@ type ServerMessage =
   | {
       type: "TEMPERATURE";
       payload: {
-        celsius: number;
+        temp: number;
       };
     }
   | {
@@ -92,7 +91,7 @@ function useServerData(): ServerData {
       } else if (message.type === "TEMPERATURE") {
         setState((state) => ({
           ...state,
-          temperature: message.payload.celsius,
+          temperature: message.payload.temp,
         }));
       } else if (message.type === "CHARGING_STATE") {
         setState((state) => ({
@@ -235,71 +234,149 @@ function mapView(carCoords: null | { latitude: number; longitude: number }) {
 }
 
 export default function App() {
-  const { battery, initRequest } = useServerData();
-  const [warnings,] = useState([]);
+  const { battery, temperature, coords, initRequest } = useServerData();
 
   const showWarning = (warning) => {
     Toast.show({
-      type: 'error',
-      text1: 'Warning!',
-      text2: warning
+      type: "error",
+      text1: "Warning!",
+      text2: warning,
     });
-  }
-
-  const buttonLockDoorHandler = () => {
-    console.log('You have been clicked a button!');
-    // do something
   };
+
+  const [adjusting, setAdjusting] = useState<null | number>(null);
+  console.log(adjusting);
+
+  const temperatureAdjustment = (
+    <View
+      style={{
+        flexDirection: "row",
+        borderTopColor: "white",
+        borderTopWidth: 1,
+      }}
+    >
+      <TouchableOpacity
+        style={{
+          flex: 1.5,
+          backgroundColor: "#E4E4E4",
+          borderBottomLeftRadius: 20,
+          padding: 15,
+          display: "flex",
+          alignItems: "center",
+        }}
+        activeOpacity={0.5}
+      >
+        <Text style={{ fontSize: 25, color: "#555555" }}>-</Text>
+      </TouchableOpacity>
+      <View
+        style={{
+          flex: 3,
+          backgroundColor: "#E4E4E4",
+          padding: 15,
+          display: "flex",
+          alignItems: "center",
+          borderRightColor: "white",
+          borderRightWidth: 2,
+          borderLeftColor: "white",
+          borderLeftWidth: 2,
+        }}
+      >
+        <Text style={{ fontSize: 25, color: "#555555" }}>
+          {adjusting ?? "?"}°C
+        </Text>
+      </View>
+      <TouchableOpacity
+        style={{
+          flex: 1.5,
+          backgroundColor: "#E4E4E4",
+          borderBottomRightRadius: 20,
+          padding: 15,
+          display: "flex",
+          alignItems: "center",
+        }}
+        activeOpacity={0.5}
+      >
+        <Text style={{ fontSize: 25, color: "#555555" }}>+</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress={() => showWarning('abc')}>
-        <Image source={require('./car.png')}
-          style={styles.teslaImage} />
+      <TouchableOpacity onPress={() => showWarning("abc")}>
+        <Image
+          source={require("./assets/autko1.png")}
+          style={styles.teslaImage}
+        />
       </TouchableOpacity>
 
       <View style={styles.statRow}>
-        <SimpleLineIcons
-          name="energy"
-          color="#F5D21F"
-          size={40}
-        />
-        <Text style={styles.batteryText}>
-          {battery * 100}%
-        </Text>
+        <View>
+          <Entypo
+            name="battery"
+            color="#F5D21F"
+            size={30}
+            style={{ transform: [{ rotate: "270deg" }], marginBottom: 2 }}
+          />
+          <Text style={styles.batteryText}>{battery * 100}%</Text>
+        </View>
+
         <Progress.Bar
           progress={battery}
-          height={40}
+          borderRadius={20}
+          height={50}
           width={250}
-          color='#F5D21F'
+          color="#F5D21F"
         />
       </View>
-      <View style={styles.statRow}>
-        <TouchableOpacity
-          onPress={buttonLockDoorHandler}
-          style={styles.temperatureButton}>
-          <Text style={styles.temperatureText}>
-            +
-          </Text>
-        </TouchableOpacity>
-        <Text style={styles.temperatureText}>15℃</Text>
-        
-        <TouchableOpacity
-          onPress={buttonLockDoorHandler}
-          style={styles.temperatureButton}>
-          <Text style={styles.temperatureText}>
-            -
-          </Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.temperatureContainer}>
-        <View>
+
+      <View style={{ width: "100%" }}>
+        <View
+          style={{
+            flexDirection: "row",
+          }}
+        >
+          <View
+            style={{
+              flex: 1.2,
+              backgroundColor: "#489F81",
+              borderTopLeftRadius: 20,
+              borderBottomLeftRadius: adjusting ? 0 : 20,
+              padding: 15,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ fontSize: 25, color: "white" }}>
+              {temperature ?? "?"}°C
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={{
+              flex: 3,
+              backgroundColor: "#5FCCA6",
+              borderTopRightRadius: 20,
+              borderBottomRightRadius: adjusting ? 0 : 20,
+              padding: 15,
+              display: "flex",
+              alignItems: "center",
+            }}
+            activeOpacity={0.5}
+            onPress={() => {
+              setAdjusting((adj) => (adj ? null : temperature));
+            }}
+          >
+            <Text style={{ fontSize: 25, color: "white" }}>
+              <FontAwesome name="thermometer-3" size={25} />
+              {"  Adjust "}
+              {adjusting ? "On" : "Off"}
+            </Text>
+          </TouchableOpacity>
         </View>
+        {adjusting ? temperatureAdjustment : null}
       </View>
-      <Toast
-        position='top'
-        bottomOffset={20}
-      />
+
+      <Toast position="top" bottomOffset={20} />
     </View>
   );
 }
@@ -307,108 +384,36 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    padding: '15%',
-    // justifyContent: 'center',
-  },
-  statsContainer: {
-    flex: 2,
-    alignItems: 'center',
-    margin: 10,
-    padding: 10
+    backgroundColor: "#fff",
+    alignItems: "center",
+    padding: "15%",
+    gap: 20,
   },
   statRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
     margin: 3,
-    padding: 3
+    padding: 3,
   },
   batteryText: {
-    color: '#F5D21F', 
-    fontSize: 25,
-    margin: 5
+    color: "#F5D21F",
+    fontSize: 20,
+    margin: 5,
   },
   teslaImage: {
-    width: 300,
+    width: 400,
     height: 200,
-    margin: 50
+    margin: 50,
   },
   temperatureContainer: {
     display: "flex",
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignContent: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    alignContent: "center",
+    justifyContent: "center",
     margin: 10,
-    padding: 18, 
+    padding: 18,
     borderRadius: 100,
   },
-  modifyTemperatureContainer: {
-    display: "flex",
-    flexDirection: 'column',
-  },
-  temperatureButton: {
-    // width: 45,
-    // height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    // borderRadius: 80,
-    // backgroundColor: '#ADD8E6',
-    marginHorizontal: 10, 
-    fontSize: 40
-  },
-  temperatureText: {
-    fontSize: 40, 
-    textShadowColor: 'grey',
-    alignContent: 'center',
-    alignItems: 'center'
-  }
 });
-
-
-{/* <View style={styles.doorContainer}>
-  <TouchableOpacity
-    onPress={buttonLockDoorHandler}
-    style={styles.lockDoorButton}>
-    <Entypo
-      name="lock"
-      color="#D3D3D3"
-      size={40}
-    />
-  </TouchableOpacity>
-  <TouchableOpacity
-    onPress={buttonLockDoorHandler}
-    style={styles.unlockDoorButton}>
-    <Entypo
-      name="lock-open"
-      color="#D3D3D3"
-      size={20}
-    />
-  </TouchableOpacity>
-</View> */
-}
-// lockDoorButton: {
-//   width: 100,
-//     height: 100,
-//       justifyContent: 'center',
-//         alignItems: 'center',
-//           padding: 10,
-//             borderRadius: 100,
-//               backgroundColor: '#808080',
-//   },
-// unlockDoorButton: {
-//   width: 70,
-//     height: 70,
-//       justifyContent: 'center',
-//         alignItems: 'center',
-//           padding: 10,
-//             borderRadius: 100,
-//               backgroundColor: '#808080',
-//   },
-// doorContainer: {
-//   display: "flex",
-//     flexDirection: 'row',
-//       justifyContent: 'center',
-//         alignContent: 'center',
-//           alignItems: 'center',
-//   },
