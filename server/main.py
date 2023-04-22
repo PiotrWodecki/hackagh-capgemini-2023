@@ -91,6 +91,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json(speed.get_json()),
                 await websocket.send_json(tempereature.get_json())
                 await websocket.send_json(battery.get_json_charging())
+                await websocket.send_json(position.get_json())
             elif message_type == "INIT_REQUEST_CAR":
                 print("New car connected")
                 car_websockets.append(websocket)
