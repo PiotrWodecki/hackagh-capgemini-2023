@@ -14,7 +14,7 @@ You can reach the websocket at `ws://localhost:8000/ws`.
 To expose the websocket you need to use [localtunnel](https://github.com/localtunnel/localtunnel). Expose to internet with:
 
 ```shell
-lt --host http://loca.lt --port 8000
+lt --host http://loca.lt --port 8000 --local-host 127.0.0.1 --subdomain <domain>
 ```
 
 Then you can use `ws://<created_domain>/ws`
