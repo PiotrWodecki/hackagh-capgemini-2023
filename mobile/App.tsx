@@ -177,7 +177,7 @@ function useRollbackValue(value, serverSetFunction) {
   const [state, setState] = useState(value);
 
   React.useEffect(() => {
-    if (state === null && value !== null) {
+    if (value !== null) {
       setState(value);
     }
   }, [value]);
@@ -283,7 +283,7 @@ function TimePicker({ route }) {
 }
 
 function OurMapView({ route, navigation }) {
-  const carCoords: null | { latitude: number; longitude: number } = route.params;
+  const { coords: carCoords }: ServerData = useContext(wsContext);
   const [status, requestPermission] = Location.useForegroundPermissions();
   const mapRef = useRef<MapView>();
 
@@ -587,7 +587,7 @@ function App({ route, navigation }) {
       </View>
       <TouchableOpacity
         style={{ width: "100%", alignItems: "center", backgroundColor: "#5FCCA6", padding: 10, borderRadius: 20 }}
-        onPress={() => navigation.navigate("map", coords)}>
+        onPress={() => navigation.navigate("map")}>
         <FontAwesome5
           name="map-marked-alt"
           size={40}
