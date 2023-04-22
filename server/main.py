@@ -7,7 +7,7 @@ app = FastAPI()
 
 class Battery:
     def __init__(self):
-        self.percent = 1.0  # fully charged at the beginning
+        self.percent = 0.0  # fully charged at the beginning
         self.charging = False
     def get_json_percent(self):
         return {
@@ -48,12 +48,27 @@ class Tempereature:
             }
         }
 
+class Position:
+    def __init__(self):
+        self.lat = 0.0
+        self.lon = 0.0
+
+    def get_json(self):
+        return {
+            "type": "COORDS",
+            "payload": {
+                "lat": self.lat,
+                "lon": self.lon
+            }
+        }
+
 app_websockets = []
 car_websockets = []
 
 battery = Battery()
 speed = Speed()
 tempereature = Tempereature()
+position = Position()
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -102,6 +117,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 print("Charging: ", battery.charging)
                 for w in car_websockets:
                     await w.send_json(battery.get_json_charging())
+            elif message_type == "COORDS":
+                position.lat = float(message["payload"]["lat"])
+                position.lon = float(message["payload"]["lon"])
+                print("Position: ", position.lat, position.lon)
+                for w in app_websockets:
+                    await w.send_json(position.get_json())
             else:
                 print("Unknown message type: ", message_type)
     except WebSocketDisconnect:
