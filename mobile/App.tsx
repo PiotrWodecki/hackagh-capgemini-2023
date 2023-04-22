@@ -1,10 +1,18 @@
 import React, { useRef } from "react";
-import MapView from "react-native-maps";
+import MapView, { Marker } from "react-native-maps";
 import { useEffect, useState } from "react";
-import { StatusBar } from "expo-status-bar";
-import { StyleSheet, Text, TouchableOpacity, View, Image, FlatList } from "react-native";
+import {
+  FlatList,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View, Image,
+  StatusBar,
+} from "react-native";
 import * as Location from "expo-location";
 import useWebSocket from "react-native-use-websocket";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Progress from 'react-native-progress';
 import Slider from '@react-native-community/slider';
 import { SimpleLineIcons, FontAwesome, Entypo } from '@expo/vector-icons';
@@ -31,6 +39,10 @@ type ServerMessage =
   | {
       type: "CHARGING_STATE";
       payload: { charging: boolean };
+    }
+  | {
+      type: "COORDS_CAR";
+      payload: { latitude: number; longitude: number };
     };
 
 type ServerData = {
@@ -38,6 +50,7 @@ type ServerData = {
   temperature: null | number;
   speed: null | number;
   charging: null | boolean;
+  coords: null | { latitude: number; longitude: number };
   initRequest(): void;
 };
 
@@ -46,7 +59,7 @@ function useServerData(): ServerData {
   const { sendJsonMessage, lastJsonMessage } = useWebSocket(socketUrl, {
     onOpen: () => {
       console.log("connected");
-      sendJsonMessage({ type: "INIT_REQUEST" });
+      sendJsonMessage({ type: "INIT_REQUEST_APP" });
     },
     onError: (ev) => console.error("WS error: ", ev.message),
     shouldReconnect: (closeEvent) => true,
@@ -57,8 +70,9 @@ function useServerData(): ServerData {
     speed: null,
     temperature: null,
     charging: null,
+    coords: null,
     initRequest: () => {
-      sendJsonMessage({ type: "INIT_REQUEST" });
+      sendJsonMessage({ type: "INIT_REQUEST_APP" });
     },
   });
 
@@ -85,6 +99,11 @@ function useServerData(): ServerData {
           ...state,
           charging: message.payload.charging,
         }));
+      } else if (message.type === "COORDS_CAR") {
+        setState((state) => ({
+          ...state,
+          coords: message.payload,
+        }));
       } else if (Object.keys(message).length != 0) {
         console.log("Unhandled message: ", message);
       }
@@ -96,7 +115,92 @@ function useServerData(): ServerData {
   return state;
 }
 
-function mapView() {
+function timePicker() {
+  const dayNames = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Monday",
+  ];
+
+  const defaultTime = new Date(2000, 1, 1, 8, 0);
+  const [times, setTimes] = useState([
+    defaultTime,
+    defaultTime,
+    defaultTime,
+    defaultTime,
+    defaultTime,
+    defaultTime,
+    defaultTime,
+  ]);
+
+  const [showPickerForDay, setShowPickerForDay] = useState<null | number>(null);
+
+  const onChange = (event: any, selectedDate: Date) => {
+    setTimes((times) => {
+      times[showPickerForDay] = selectedDate;
+      return times;
+    });
+    setShowPickerForDay(null);
+  };
+
+  return (
+    <View
+      style={{
+        height: "100%",
+        alignItems: "center",
+        justifyContent: "center",
+        display: "flex",
+      }}
+    >
+      <FlatList
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: "center",
+          gap: 10,
+        }}
+        data={times}
+        renderItem={({ item, index }) => {
+          return (
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 20,
+                backgroundColor: "#e4e4e4",
+                borderRadius: 5,
+                padding: 10,
+              }}
+            >
+              <Text style={{ fontSize: 30, width: 200 }}>
+                {dayNames[index]}
+              </Text>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#f5d21f",
+                  borderRadius: 5,
+                  paddingHorizontal: 5,
+                }}
+                onPress={() => setShowPickerForDay(index)}
+              >
+                <Text style={{ fontSize: 30 }}>
+                  {item.toLocaleTimeString().slice(0, 5)}
+                </Text>
+              </TouchableOpacity>
+              {showPickerForDay === index && (
+                <DateTimePicker mode="time" value={item} onChange={onChange} />
+              )}
+            </View>
+          );
+        }}
+      ></FlatList>
+    </View>
+  );
+}
+
+function mapView(carCoords: null | { latitude: number; longitude: number }) {
   const [status, requestPermission] = Location.useForegroundPermissions();
   const mapRef = useRef<MapView>();
 
@@ -104,12 +208,14 @@ function mapView() {
     (async () => {
       await requestPermission();
       const pos = await Location.getLastKnownPositionAsync();
-      mapRef.current.animateCamera({
-        center: {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        },
-        zoom: 15,
+
+      const coords: { latitude: number; longitude: number }[] = [pos.coords];
+      if (carCoords) {
+        coords.push(carCoords);
+      }
+
+      mapRef.current.fitToCoordinates(coords, {
+        edgePadding: { bottom: 20, left: 20, right: 20, top: 20 },
       });
     })();
   }, []);
@@ -121,7 +227,9 @@ function mapView() {
         loadingEnabled={true}
         showsUserLocation={true}
         ref={mapRef}
-      ></MapView>
+      >
+        {carCoords && <Marker coordinate={carCoords}></Marker>}
+      </MapView>
     </View>
   );
 }
