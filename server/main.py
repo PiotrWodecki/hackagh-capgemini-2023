@@ -106,6 +106,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 print("Unknown message type: ", message_type)
     except WebSocketDisconnect:
         if websocket in app_websockets:
+            print("App disconnected")
             app_websockets.remove(websocket)
         if websocket in car_websockets:
+            print("Car disconnected")
             car_websockets.remove(websocket)
