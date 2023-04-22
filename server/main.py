@@ -7,7 +7,7 @@ app = FastAPI()
 
 class Battery:
     def __init__(self):
-        self.percent = 0.0  # fully charged at the beginning
+        self.percent = 0.0 
         self.charging = False
     def get_json_percent(self):
         return {
@@ -53,6 +53,14 @@ class Tempereature:
             "type": "TEMPERATURE_SET",
             "payload": {
                 "temp": target
+            }
+        }
+    
+    def get_json_state(self, state):
+        return {
+            "type": "TEMPERATURE_STATE",
+            "payload": {
+                "temp": state
             }
         }
 
@@ -124,6 +132,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 target = float(message["payload"]["temp"])
                 for w in car_websockets:
                     await w.send_json(tempereature.get_json_set(target))
+            elif message_type == "TEMPERATURE_STATE":
+                state = float(message["payload"]["state"])
+                print("Temperature control state: ", state)
+                for w in car_websockets:
+                    await w.send_json(tempereature.get_json_state(state))
             elif message_type == "CHARGING_STATE":
                 for w in app_websockets:
                     await w.send_json(battery.get_json_charging())
