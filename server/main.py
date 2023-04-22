@@ -153,3 +153,5 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket in car_websockets:
             print("Car disconnected")
             car_websockets.remove(websocket)
+    except RuntimeError as e:
+        print("Runtime error", e)
